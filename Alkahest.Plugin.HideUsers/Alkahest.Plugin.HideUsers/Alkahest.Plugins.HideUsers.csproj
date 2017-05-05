@@ -8,7 +8,7 @@
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>HideUsers</RootNamespace>
-    <AssemblyName>hide-users</AssemblyName>
+    <AssemblyName>alkahest-hide-users</AssemblyName>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
@@ -32,7 +32,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Alkahest.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=e47491bd0e9c4e99, processorArchitecture=MSIL">
-      <HintPath>..\packages\Alkahest.Core.1.0.0-alpha2\lib\net461\Alkahest.Core.dll</HintPath>
+      <HintPath>..\packages\Alkahest.Core.1.0.0-alpha3\lib\net461\Alkahest.Core.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

@@ -9,13 +9,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System;
+using System.Timers;
 
-namespace HideUsers
+namespace Alkahest.Plugins.HideUsers
 {
     public class HideUsersPlugin : IPlugin
     {
         public string Name => "hide-users";
         bool visible = true;
+        bool firstViewDistance = true;
+        uint oldViewDistance = 1;
+        Timer delay;
         EntityId currentPlayer;
         Dictionary<EntityId, SSpawnUserPacket> SpawnedUsers;
         Dictionary<EntityId, SAbnormalityBeginPacket> HeldAbnormals;
@@ -23,67 +27,13 @@ namespace HideUsers
 
         public HideUsersPlugin()
         {
-            SpawnedUsers = new Dictionary<EntityId, SSpawnUserPacket>();
-            HeldAbnormals = new Dictionary<EntityId, SAbnormalityBeginPacket>();
+            delay = new Timer(1000);
         }
 
         private bool HandleSpawnUser(GameClient client, Direction direction, SSpawnUserPacket packet)
         {
-
-            if (!SpawnedUsers.ContainsKey(packet.Target))
-            {
-                SpawnedUsers.Add(packet.Target, packet);
-                _log.Info("[ADDED {1}] Nearby users: {0}", SpawnedUsers.Count, packet.UserName);
-            }
-            if (visible)
-            {
-                client.SendToClient(packet);
-            }
-
-            return false;
-        }
-        private bool HandleUserDespawn(GameClient client, Direction direction, SDespawnUserPacket packet)
-        {
-            if (SpawnedUsers.TryGetValue(packet.Target, out SSpawnUserPacket rp))
-            {
-                SpawnedUsers.Remove(packet.Target);
-                _log.Info("[REMOVED {1}] Spawned users: {0}", SpawnedUsers.Count, rp.UserName);
-            }
-            //_log.Basic("[DESPAWN] {0}.", packet.ToString());
-            return true;
-        }
-        private bool HandleUserLocation(GameClient client, Direction direction, SUserLocationPacket packet)
-        {
-            if (SpawnedUsers.TryGetValue(packet.Source, out SSpawnUserPacket rp))
-            {
-                rp.Position = packet.Position;
-                //_log.Basic("[MOVED {0}]", rp.UserName);
-            }
-
-            return true;
-
-        }     
-        
-        private bool HandleAbnormBegin(GameClient client, Direction direction, SAbnormalityBeginPacket packet)
-        {
-            return true;
-        }
-        private bool HandleAbnormEnd(GameClient client, Direction direction, SAbnormalityEndPacket packet)
-        {
-            return true;
-        }
-
-        private bool HandleSpawnMe(GameClient client, Direction direction, SSpawnMePacket packet)
-        {
-            SpawnedUsers.Clear();
-            currentPlayer = packet.Target;
-            _log.Info("Packets cleared");
-            return true;
-        }
-        private bool HandleLogin(GameClient client, Direction direction, SLoginPacket packet)
-        {
-            SpawnedUsers.Clear();
-            return true;
+            if (!visible) return false;
+            else return true;
         }
         private bool HandleChat(GameClient client, Direction direction, CChatPacket packet)
         {
@@ -94,68 +44,64 @@ namespace HideUsers
             {
                 if (m.Substring(7).Equals("on") && !visible)
                 {
-                    visible = true;
-                    foreach (var pair in SpawnedUsers.ToList())
+                    delay.Elapsed += (s, ev) =>
                     {
-                        client.SendToClient(pair.Value);
-                    }
+                        client.SendToServer(new CSetVisibleRangePacket { Range = oldViewDistance });
+                        delay.Stop();
+                    };
+                    visible = true;
+                    client.SendToServer(new CSetVisibleRangePacket { Range = 0 });
+                    delay.Start();
+
                     _log.Basic("Showing characters.");
                 }
                 else if (m.Substring(7).Equals("off") && visible)
                 {
-                    visible = false;
-                    foreach (var pair in SpawnedUsers.ToList())
+                    delay.Elapsed += (s, ev) =>
                     {
-                        var newPacket = new SDespawnUserPacket()
-                        {
-                            Target = pair.Value.Target,
-                            Kind = DespawnKind.OutOfView,
-                           
-                        };
-
-                        client.SendToClient(newPacket);
-                    }
+                        client.SendToServer(new CSetVisibleRangePacket { Range = oldViewDistance });
+                        delay.Stop();
+                    };
+                    visible = false;
+                    client.SendToServer(new CSetVisibleRangePacket { Range = 0 });
+                    delay.Start();
                     _log.Basic("Hiding characters.");
-                    
                 }
                 return false;
 
             }
             else return true;
         }
+        private bool HandleSetVisibleRange(GameClient client, Direction direction, CSetVisibleRangePacket packet)
+        {
+            if (firstViewDistance)
+            {
+                oldViewDistance = packet.Range;
+                firstViewDistance = false;
+            }
+            return true;
+        }
 
         public void Start(GameProxy[] proxies)
         {
             foreach (var proc in proxies.Select(x => x.Processor))
             {
-                proc.AddHandler<CChatPacket>(HandleChat);
-                proc.AddHandler<SLoginPacket>(HandleLogin);
-                proc.AddHandler<SSpawnMePacket>(HandleSpawnMe);
                 proc.AddHandler<SSpawnUserPacket>(HandleSpawnUser);
-                proc.AddHandler<SUserLocationPacket>(HandleUserLocation);
-                proc.AddHandler<SDespawnUserPacket>(HandleUserDespawn);
-                proc.AddHandler<SAbnormalityBeginPacket>(HandleAbnormBegin);
-                proc.AddHandler<SAbnormalityEndPacket>(HandleAbnormEnd);
+                proc.AddHandler<CSetVisibleRangePacket>(HandleSetVisibleRange);
+                proc.AddHandler<CChatPacket>(HandleChat);
             }
-
-            _log.Basic("Hide users test plugin started");
+            _log.Basic("Hide users plugin started");
         }
         public void Stop(GameProxy[] proxies)
         {
             foreach (var proc in proxies.Select(x => x.Processor))
             {
-                proc.RemoveHandler<CChatPacket>(HandleChat);
-                proc.RemoveHandler<SLoginPacket>(HandleLogin);
-                proc.RemoveHandler<SSpawnMePacket>(HandleSpawnMe);
                 proc.RemoveHandler<SSpawnUserPacket>(HandleSpawnUser);
-                proc.RemoveHandler<SUserLocationPacket>(HandleUserLocation);
-                proc.RemoveHandler<SDespawnUserPacket>(HandleUserDespawn);
-                proc.RemoveHandler<SAbnormalityBeginPacket>(HandleAbnormBegin);
-                proc.RemoveHandler<SAbnormalityEndPacket>(HandleAbnormEnd);
-
+                proc.RemoveHandler<CSetVisibleRangePacket>(HandleSetVisibleRange);
+                proc.RemoveHandler<CChatPacket>(HandleChat);
             }
 
-            _log.Basic("Hide users test plugin stopped");
+            _log.Basic("Hide users plugin stopped");
 
         }
 
